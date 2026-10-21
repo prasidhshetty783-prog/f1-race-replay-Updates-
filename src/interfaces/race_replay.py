@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 import time
 import arcade
 import numpy as np
@@ -189,6 +191,15 @@ class F1RaceReplayWindow(arcade.Window):
          self.x_min, self.x_max,
          self.y_min, self.y_max, self.drs_zones) = build_track_from_example_lap(example_lap)
 
+        # Extra circuit data for 3D / detail insights: elevation along the
+        # reference lap, corner numbers and the event identity.
+        self.plot_z_ref = example_lap["Z"] if "Z" in example_lap else None
+        self._corners = self._load_corners(session)
+        self._event_info = dict(session_info or {})
+        event = getattr(session, "event", None)
+        if event is not None:
+            self._event_info.setdefault("location", str(event.get("Location", "")))
+
         # Build a dense reference polyline (used for projecting car (x,y) -> along-track distance)
         ref_points = self._interpolate_points(self.plot_x_ref, self.plot_y_ref, interp_points=4000)
         # store as numpy arrays for vectorized ops
@@ -251,6 +262,10 @@ class F1RaceReplayWindow(arcade.Window):
         # Real-world map under the track (OpenStreetMap). Built in the
         # background so it never delays the replay; toggle with M.
         self.map_underlay_comp = MapUnderlayComponent()
+        # 3D Track Detail opens in its own process (T); the hint keeps the shortcut discoverable.
+        self._track_3d_process = None
+        self._track_3d_hint = arcade.Text("Press T for the 3D track view", 10, 6,
+                                          (190, 190, 190, 210), 10, anchor_x="left", anchor_y="bottom")
         if get_settings().osm_map_enabled:
             event = getattr(session, "event", None)
             self.map_underlay_comp.load_async(
@@ -360,8 +375,12 @@ class F1RaceReplayWindow(arcade.Window):
             }
         }
 
-        # Send every ~2s so reconnecting clients receive geometry without special handling
-        if hasattr(self, 'plot_x_ref') and int(self.frame_index) % 120 == 0:
+        # Send every ~2s so reconnecting clients receive geometry without special handling.
+        # Timed by the wall clock: an exact frame-number check can be skipped for a long
+        # time at high playback speeds or low frame rates (each update jumps several frames).
+        now = time.monotonic()
+        if hasattr(self, 'plot_x_ref') and now - getattr(self, "_geometry_sent_at", 0.0) >= 2.0:
+            self._geometry_sent_at = now
             payload["track_geometry"] = {
                 "x": self.plot_x_ref.tolist(),
                 "y": self.plot_y_ref.tolist(),
@@ -370,7 +389,12 @@ class F1RaceReplayWindow(arcade.Window):
                 "x_outer": self.x_outer.tolist(),
                 "y_outer": self.y_outer.tolist(),
                 "rotation_deg": self.circuit_rotation,
+                # Elevation of the reference lap (same units as x/y), if FastF1 had it
+                "z": self.plot_z_ref.tolist() if self.plot_z_ref is not None else None,
+                "corners": self._corners,
+                "drs_zones": [[zone["start"]["index"], zone["end"]["index"]] for zone in (self.drs_zones or [])],
             }
+            payload["session_info"] = self._event_info
 
         # Send pre-computed data continuously. It's just a Python dictionary reference 
         # (O(1) memory overhead in local publish/subscribe) and ensures windows 
@@ -379,6 +403,19 @@ class F1RaceReplayWindow(arcade.Window):
         payload["status_laps"] = self._precomputed_status_laps
 
         self.telemetry_stream.broadcast(payload)
+
+    @staticmethod
+    def _load_corners(session):
+        """Corner numbers and positions from FastF1's circuit info (empty if unavailable)."""
+        try:
+            corners = session.get_circuit_info().corners
+            return [
+                {"number": int(row["Number"]), "letter": str(row.get("Letter") or ""),
+                 "x": float(row["X"]), "y": float(row["Y"])}
+                for _, row in corners.iterrows()
+            ]
+        except Exception:
+            return []
 
     @staticmethod
     def _compute_lap_times(frames, session=None):
@@ -1620,6 +1657,8 @@ class F1RaceReplayWindow(arcade.Window):
 
         # Map credit (required by the OpenStreetMap licence whenever the map shows)
         self.map_underlay_comp.draw_attribution(self)
+        if self.telemetry_stream is not None:
+            self._track_3d_hint.draw()
         
         # Draw tooltips and overlays on top of everything
         self.progress_bar_comp.draw_overlays(self)
@@ -1727,6 +1766,8 @@ class F1RaceReplayWindow(arcade.Window):
             self.show_driver_labels = not self.show_driver_labels
         elif symbol == arcade.key.M:
             self.map_underlay_comp.toggle_visibility()
+        elif symbol == arcade.key.T:
+            self.open_track_3d()
         elif symbol == arcade.key.H:
             # Toggle Controls popup with 'H' key — show anchored to bottom-left with 20px margin
             margin_x = 20
@@ -1779,6 +1820,16 @@ class F1RaceReplayWindow(arcade.Window):
         self.progress_bar_comp.on_mouse_motion(self, x, y, dx, dy)
         self.race_controls_comp.on_mouse_motion(self, x, y, dx, dy)
         
+    def open_track_3d(self):
+        """Open the 3D Track Detail window (fed by the telemetry stream), once."""
+        if self.telemetry_stream is None:
+            print("3D Track Detail needs the telemetry stream, which is turned off for this replay")
+            return
+        if self._track_3d_process is not None and self._track_3d_process.poll() is None:
+            return  # already open
+        print("🚀 Launching: 3D Track Detail")
+        self._track_3d_process = subprocess.Popen([sys.executable, "-m", "src.insights.track_3d_window"])
+
     def close(self):
         """Clean up resources when window closes."""
         if hasattr(self, 'telemetry_stream') and self.telemetry_stream:

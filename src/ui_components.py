@@ -1145,6 +1145,7 @@ class ControlsPopupComponent(BaseComponent):
             ("B", "Toggle Progress Bar"),
             ("L", "Toggle Driver Labels"),
             ("M", "Toggle Real-World Map"),
+            ("T", "Open 3D Track View"),
             ("H", "Toggle Help Popup"),
             ("C", "Toggle Drivers points table"),
             ("A", "Toggle Constructors points table")

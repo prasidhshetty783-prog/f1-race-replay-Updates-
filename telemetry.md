@@ -97,6 +97,21 @@ The `safety_car` field in each frame contains the simulated Safety Car position 
 
 > **Note:** The Safety Car position is simulated (placed ~500m ahead of the race leader) since the F1 API does not provide real SC GPS data. The `phase` field is useful for triggering visual effects in custom tools.
 
+### Track Geometry
+
+About every 2 seconds the payload also carries `track_geometry` (and `session_info`), so windows that connect late still get the circuit layout. All coordinates are in the same world units as the driver `x` / `y` (FastF1 position data, 1/10 m).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `x`, `y` | list of float | Centre line of the reference lap |
+| `x_inner`, `y_inner`, `x_outer`, `y_outer` | list of float | Track edges as drawn by the replay |
+| `rotation_deg` | float | Rotation the replay applies when drawing the circuit |
+| `z` | list of float \| null | Elevation along the reference lap (`null` if FastF1 has none) |
+| `corners` | list | Corner markers: `{"number", "letter", "x", "y"}` (empty if unavailable) |
+| `drs_zones` | list | DRS zones as `[start_index, end_index]` into `x` / `y` |
+
+`session_info` holds the event details passed to the replay (`event_name`, `circuit_name`, `country`, `year`, `round`, ...) plus `location`.
+
 ### Sector Times
 
 Each entry in the `lap_times` payload carries the three sector times for that lap, in seconds:

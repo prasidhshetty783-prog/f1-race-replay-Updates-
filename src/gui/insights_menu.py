@@ -65,6 +65,7 @@ class InsightsMenu(QMainWindow):
             "Track",
             [
                 ("Track Position Map", "Live driver positions on real or circular track map", self.launch_track_position),
+                ("3D Track Detail", "The circuit in 3D: elevation, live cars, drone camera & circuit history", self.launch_track_3d),
             ]
         ))
 
@@ -199,6 +200,13 @@ class InsightsMenu(QMainWindow):
         print("🚀 Launching: Track Position Map")
         from src.insights.track_position_window import TrackPositionWindow
         window = TrackPositionWindow()
+        window.show()
+        self.opened_windows.append(window)
+
+    def launch_track_3d(self):
+        print("🚀 Launching: 3D Track Detail")
+        from src.insights.track_3d_window import Track3DWindow
+        window = Track3DWindow()
         window.show()
         self.opened_windows.append(window)
 

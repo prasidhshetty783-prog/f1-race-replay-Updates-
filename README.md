@@ -12,6 +12,7 @@ A Python application for visualizing Formula 1 race telemetry and replaying race
 - **Real-World Map:** The track sits on a real map of the area around it — roads, buildings, parks and water from OpenStreetMap. Press **M** to hide or show it, or turn it off in Settings.
 - **Safety Car Visualization:** See the Safety Car deploy from pit lane, lead the field, and return to pits — with animated transitions and pulsing glow effects.
 - **Insights Menu:** Floating menu for quick access to telemetry analysis tools (launches automatically with replay).
+- **3D Track Detail:** An insight window with the circuit in 3D on its real surroundings — elevation, live cars, DRS zones and corner numbers — with orbit, follow-car and drone cameras, circuit stats, past winners and an elevation profile.
 - **Leaderboard:** See live driver positions and current tyre compounds.
 - **Lap & Time Display:** Track the current lap and total race time.
 - **Driver Status:** Drivers who retire or go out are marked as "OUT" on the leaderboard.
@@ -30,6 +31,7 @@ A Python application for visualizing Formula 1 race telemetry and replaying race
 - **Toggle Progress Bar**: **B** to hide/show progress bar
 - **Toggle Driver Names**: **L** to hide/show driver names on track
 - **Toggle Real-World Map**: **M** to hide/show the map under the track
+- **3D Track View**: **T** to open the 3D Track Detail window
 - **Select driver/drivers**: Click to select driver or shift click to select multiple drivers
 
 
@@ -82,6 +84,27 @@ The replay draws the circuit's real surroundings under the track: roads, buildin
 4. **Draw in the background.** The map is rendered into a single image on a background thread, so the replay starts straight away and the map fades in when it's ready.
 
 The credit "Map data © OpenStreetMap contributors" is shown whenever the map is visible, as the [OpenStreetMap licence](https://www.openstreetmap.org/copyright) requires. If you're offline and nothing is cached, the replay simply runs without a map.
+
+## 3D Track Detail
+
+Press **T** in the replay (the bottom-left corner reminds you), or open **3D Track Detail** from the Insights Menu (Track section), while a race replay is running. It shows the circuit in 3D with every car live on it, plus a side panel with circuit stats, current conditions and the circuit's history, and an elevation profile of the lap along the bottom.
+
+### Cameras
+
+- **Orbit:** drag to rotate, right-drag to pan, scroll to zoom
+- **Follow car:** a chase camera behind one car. Pick the car in the panel, or click a driver on the replay leaderboard
+- **Drone:** fly freely. **W / A / S / D** to move, **R / F** up and down, drag to look around, hold **Shift** to go faster
+
+### Where the data comes from
+
+| What | Source |
+|------|--------|
+| Track shape, elevation, cars | The replay's own FastF1 data (elevation is exaggerated on flat circuits so the relief is visible; the panel says by how much) |
+| Corner numbers | FastF1 circuit info |
+| Ground map and buildings | OpenStreetMap, the same cached data as the [Real-World Map](#real-world-map) (buildings are extruded from their footprints, using their height tag when present) |
+| Past winners, fastest race lap | [Jolpica-F1](https://github.com/jolpica/jolpica-f1) (the Ergast successor) via FastF1, cached in `computed_data/circuit_facts/` for 30 days. Only races **before** the one you're replaying are used, so nothing is spoiled |
+
+Everything heavy (meshes, map, history) loads in the background, so the window opens straight away and fills in. Offline, it still shows the track, cars and elevation.
 
 ## Qualifying Session Support (in development)
 
@@ -223,11 +246,14 @@ f1-race-replay/
 │   │   ├── lap_time_chart_window.py
 │   │   ├── race_control_feed_window.py
 │   │   ├── sector_times_window.py
+│   │   ├── track_3d_window.py    # 3D Track Detail insight (scene data, side panel, elevation profile)
+│   │   ├── track_3d.qml          # 3D scene: terrain, track, buildings, cars and cameras (Qt Quick 3D)
 │   │   ├── track_position_window.py
 │   │   ├── tyre_strategy_window.py
 │   │   ├── telemetry_stream_viewer.py  # Raw telemetry stream viewer
 │   │   └── example_pit_wall_window.py  # Example PitWallWindow implementation
 │   ├── services/
+│   │   ├── circuit_facts.py      # Circuit history for 3D Track Detail (Jolpica-F1, cached)
 │   │   ├── circuit_map.py        # Real-world map under the track (OpenStreetMap download, cache and render)
 │   │   └── stream.py             # TCP telemetry stream server and client
 │   ├── cli/
@@ -239,6 +265,7 @@ f1-race-replay/
 │       ├── sectors.py            # Sector time analysis helpers
 │       ├── settings.py           # Persistent application settings
 │       ├── time.py               # Time formatting utilities
+│       ├── track_3d.py           # Mesh building for the 3D view: track ribbon, terrain, buildings, elevation profile
 │       └── tyres.py              # Tyre compound mapping
 ├── tests/                        # pytest suite (see docs/Testing.md)
 ├── .fastf1-cache/                # FastF1 cache folder (created automatically upon first run)
